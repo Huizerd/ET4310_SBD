@@ -1,0 +1,18 @@
+# Standard
+# ============
+* text=auto
+
+# Source files
+# ============
+*.scala text
+*.sbt text
+*.csv text
+*.properties text
+*.txt text
+*.md text
+*.tex text
+
+# Binary files
+# ============
+*.pdf binary
+*.png binary
