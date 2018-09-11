@@ -1,9 +1,10 @@
 package example
 
-import org.apache.spark.sql.types._
-import org.apache.spark.sql._
+import java.sql.Date
+
 import org.apache.log4j.{Level, Logger}
-import java.sql.{Date, Timestamp}
+import org.apache.spark.sql._
+import org.apache.spark.sql.types._
 
 
 object ExampleSpark {
@@ -56,7 +57,7 @@ object ExampleSpark {
 
     import spark.implicits._
 
-    val ds = spark.read 
+    val ds = spark.read
                   .schema(schema)
                   .option("delimiter", "\t")
                   .option("dateFormat", "yyyyMMddhhmmss")
