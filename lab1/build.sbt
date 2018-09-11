@@ -1,8 +1,8 @@
-ThisBuild / scalaVersion := "2.11.12"
+ThisBuild / scalaVersion := "2.11.8"
 
 lazy val example = (project in file("."))
   .settings(
-    name := "Example project",
+    name := "Lab 1",
     fork in run := true,
 
     libraryDependencies += "org.apache.spark" %% "spark-core" % "2.3.1",
