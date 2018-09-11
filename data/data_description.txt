@@ -9,6 +9,6 @@ AllNames:
 - Designed to be maximally inclusive, err on the side of inclusion
 
 DATE:
-- YYYYMMDDHHSS
+- yyyyMMddHHmmss
 - Date of publication (not date/time of event described)
 - '0' indicates unknown/not relevant
