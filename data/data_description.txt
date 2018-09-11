@@ -1,0 +1,14 @@
+Relevant columns: AllNames (X), DATE (B)
+
+Column descriptions
+
+AllNames:
+- Name1, Offset1; Name2, Offset2; ...
+- List of all proper names (people, organizations, events, named dates) with the character offset of their mentioning in the text
+- Multiple mentions are separate
+- Designed to be maximally inclusive, err on the side of inclusion
+
+DATE:
+- YYYYMMDDHHSS
+- Date of publication (not date/time of event described)
+- '0' indicates unknown/not relevant

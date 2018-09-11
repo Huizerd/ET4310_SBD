@@ -1,0 +1,4 @@
+/home/huis/Projects/ET4310_SBD/data/segment/20150218230000.gkg.csv
+/home/huis/Projects/ET4310_SBD/data/segment/20150218231500.gkg.csv
+/home/huis/Projects/ET4310_SBD/data/segment/20150218233000.gkg.csv
+/home/huis/Projects/ET4310_SBD/data/segment/20150218234500.gkg.csv
