@@ -4,6 +4,8 @@ import java.sql.Date
 
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.expressions.Window
+import org.apache.spark.sql.functions.{desc, explode, rank, split}
 import org.apache.spark.sql.types._
 
 object GDeltAnalysis {
@@ -59,7 +61,7 @@ object GDeltAnalysis {
     import spark.implicits._
 
     // Import data (lab1_dataset is root folder)
-    val ds = spark.read
+    val data = spark.read
       .schema(schema)
       .option("delimiter", "\t")
       .option("dateFormat", "yyyyMMddhhmmss")
@@ -67,18 +69,27 @@ object GDeltAnalysis {
       .select("publishDate", "allNames")
       .as[RawData] // to dataset (instead of dataframe)
 
-    // Remove rows with nulls and convert back to dataset
-    val ds_nonull = ds.na.drop().as[RawData]
+    // Explode each name to separate row
+    val explodedData = data
+      .filter(_.allNames != null) // filter out empty names (date is always present)
+      .withColumn("allNames", explode(split($"allNames", ";"))) // split names
+      .withColumn("allNames", split($"allNames", ",")(0)).as[RawData] // remove char offsets
 
-    // Map to tuples with counts
-    val processed = ds_nonull.map(row =>
-      ProcessedData(row.publishDate, row.allNames.split(";").map(name => (name.split(",")(0), 1))))
+    // Reduce: count names per date
+    val reducedData = explodedData
+      .filter(_.allNames != "Type ParentCategory") // filter out this weird name
+      .groupBy("publishDate", "allNames").count()
+      .withColumnRenamed("allNames", "name").as[ProcessedData] // count names per date
 
-    // Reduce (how?)
-    // val processed_reduce = processed_map.reduce()
+    // Window definition for sorting (and limiting) --> why is there no sort within groups in Spark SQL??
+    val w = Window.partitionBy("publishDate").orderBy(desc("count"))
+
+    // Order per date, limit to 10
+    val orderedData = reducedData.withColumn("rank", rank.over(w)).where($"rank" <= 10)
+      .drop("rank").as[ProcessedData]
 
     // Show results
-    processed.show()
+    orderedData.take(20).foreach(println)
 
     spark.stop
   }
@@ -91,7 +102,8 @@ object GDeltAnalysis {
 
   case class ProcessedData(
                             publishDate: Date,
-                            allNames: Array[(String, Int)]
+                            name: String,
+                            count: BigInt
                           )
 
 }
