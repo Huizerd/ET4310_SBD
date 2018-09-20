@@ -8,7 +8,7 @@ import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{desc, explode, rank, split}
 import org.apache.spark.sql.types._
 
-object GDeltAnalysis {
+object GDELTanalysis {
 
   def main(args: Array[String]) {
 
@@ -52,7 +52,7 @@ object GDeltAnalysis {
     // Get SparkSession and SparkContext
     val spark = SparkSession
       .builder
-      .appName("GDeltAnalysis")
+      .appName("GDELTanalysis")
       .master("local[8]") // use 8 cores
       .getOrCreate()
     val sc = spark.sparkContext
@@ -67,7 +67,7 @@ object GDeltAnalysis {
       .option("dateFormat", "yyyyMMddhhmmss")
       .csv("/home/huis/Projects/ET4310_SBD/data/segment/*.csv")
       .select("publishDate", "allNames")
-      .as[RawData] // to dataset (instead of dataframe)
+      .as[RawData] // to Dataset (instead of Dataframe)
 
     // Explode each name to separate row
     val explodedData = data
