@@ -63,47 +63,39 @@ object GDELTanalysis {
     // Import data (lab1_dataset is root folder)
     val data = spark.read
       .schema(schema)
+      .option("mode", "DROPMALFORMED") // filter for bad rows
       .option("delimiter", "\t")
       .option("dateFormat", "yyyyMMddhhmmss")
       .csv("/home/huis/Projects/ET4310_SBD/data/segment/*.csv")
       .select("publishDate", "allNames")
-      .as[RawData] // to Dataset (instead of Dataframe)
 
     // Explode each name to separate row
     val explodedData = data
-      .filter(_.allNames != null) // filter out empty names (date is always present)
+      .filter($"allNames".isNotNull) // filter for empty names (date is always present)
       .withColumn("allNames", explode(split($"allNames", ";"))) // split names
-      .withColumn("allNames", split($"allNames", ",")(0)).as[RawData] // remove char offsets
+      .withColumn("allNames", split($"allNames", ",")(0)) // remove char offsets
 
     // Reduce: count names per date
     val reducedData = explodedData
-      .filter(_.allNames != "Type ParentCategory") // filter out this weird name
-      .groupBy("publishDate", "allNames").count()
-      .withColumnRenamed("allNames", "name").as[ProcessedData] // count names per date
+      .filter($"allNames" =!= "Type ParentCategory") // filter for bad names
+      .groupBy("publishDate", "allNames")
+      .count() // count names per date
+      .withColumnRenamed("allNames", "name")
 
     // Window definition for sorting (and limiting) --> why is there no sort within groups in Spark SQL??
-    val w = Window.partitionBy("publishDate").orderBy(desc("count"))
+    val w = Window
+      .partitionBy("publishDate")
+      .orderBy(desc("count"))
 
     // Order per date, limit to 10
-    val orderedData = reducedData.withColumn("rank", rank.over(w)).where($"rank" <= 10)
-      .drop("rank").as[ProcessedData]
+    val orderedData = reducedData
+      .withColumn("rank", rank.over(w)).where($"rank" <= 10)
+      .drop("rank")
 
-    // Show results
-    orderedData.take(20).foreach(println)
+    // Save
+    orderedData.write.mode("overwrite").json("../output_ds") // nonvalid JSON atm
 
+    // Stop
     spark.stop
   }
-
-  // Classes for DataSet
-  case class RawData(
-                      publishDate: Date,
-                      allNames: String
-                    )
-
-  case class ProcessedData(
-                            publishDate: Date,
-                            name: String,
-                            count: BigInt
-                          )
-
 }

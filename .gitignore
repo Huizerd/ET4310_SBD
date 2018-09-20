@@ -1,0 +1,3 @@
+# Ignore output folders
+output_ds/
+output_rdd/
