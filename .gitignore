@@ -1,3 +1,6 @@
 # Ignore output folders
 output_ds/
 output_rdd/
+
+# And figures
+figures/

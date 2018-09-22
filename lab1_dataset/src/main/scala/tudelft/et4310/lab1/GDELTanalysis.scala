@@ -1,7 +1,5 @@
 package tudelft.et4310.lab1
 
-import java.sql.Date
-
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.expressions.Window
@@ -68,12 +66,14 @@ object GDELTanalysis {
       .option("dateFormat", "yyyyMMddhhmmss")
       .csv("/home/huis/Projects/ET4310_SBD/data/segment/*.csv")
       .select("publishDate", "allNames")
+      .coalesce(32) // tuned based on event timeline: enough green per task, but small diff. in finish time
 
     // Explode each name to separate row
     val explodedData = data
       .filter($"allNames".isNotNull) // filter for empty names (date is always present)
       .withColumn("allNames", explode(split($"allNames", ";"))) // split names
       .withColumn("allNames", split($"allNames", ",")(0)) // remove char offsets
+      .coalesce(32)
 
     // Reduce: count names per date
     val reducedData = explodedData
@@ -81,6 +81,7 @@ object GDELTanalysis {
       .groupBy("publishDate", "allNames")
       .count() // count names per date
       .withColumnRenamed("allNames", "name")
+      .coalesce(8)
 
     // Window definition for sorting (and limiting) --> why is there no sort within groups in Spark SQL??
     val w = Window
@@ -91,6 +92,7 @@ object GDELTanalysis {
     val orderedData = reducedData
       .withColumn("rank", rank.over(w)).where($"rank" <= 10)
       .drop("rank")
+      .coalesce(8)
 
     // Save
     orderedData.write.mode("overwrite").json("../output_ds") // nonvalid JSON atm
