@@ -66,14 +66,13 @@ object GDELTanalysis {
       .option("dateFormat", "yyyyMMddhhmmss")
       .csv("/home/huis/Projects/ET4310_SBD/data/segment/*.csv")
       .select("publishDate", "allNames")
-      .coalesce(32) // tuned based on event timeline: enough green per task, but small diff. in finish time
 
     // Explode each name to separate row
     val explodedData = data
       .filter($"allNames".isNotNull) // filter for empty names (date is always present)
       .withColumn("allNames", explode(split($"allNames", ";"))) // split names
       .withColumn("allNames", split($"allNames", ",")(0)) // remove char offsets
-      .coalesce(32)
+      .coalesce(32) // tuned based on event timeline: enough green per task, but small diff. in finish time
 
     // Reduce: count names per date
     val reducedData = explodedData
@@ -95,7 +94,7 @@ object GDELTanalysis {
       .coalesce(8)
 
     // Save
-    orderedData.write.mode("overwrite").json("../output_ds") // nonvalid JSON atm
+    orderedData.write.mode("overwrite").json("../output_df") // nonvalid JSON atm
 
     // Stop
     spark.stop
