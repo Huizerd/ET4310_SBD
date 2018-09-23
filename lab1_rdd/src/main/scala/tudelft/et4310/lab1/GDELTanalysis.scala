@@ -16,14 +16,14 @@ object GDELTanalysis {
     val spark = SparkSession
       .builder
       .appName("GDELTanalysis")
-      .master("local[8]")
+      .master("local[*]")
       .getOrCreate()
     val sc = spark.sparkContext
 
     // Import data (lab1_rdd is root folder)
     val rdd = sc
       .textFile("../data/segment/*.csv") // each file is 1 partition
-      .coalesce(8) // decrease partitions to number of cores and minimize shuffle read/write
+      .coalesce(32) // decrease partitions to number of cores and minimize shuffle read/write
 
     // flatMap rows to array of (publishDate, name) + filter (as early as possible = better)
     val data = rdd
