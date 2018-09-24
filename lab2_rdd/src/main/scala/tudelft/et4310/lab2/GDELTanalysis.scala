@@ -18,7 +18,9 @@ object GDELTanalysis {
 
     // Import data (filenames file will be placed in same folder as .jar on S3 bucket)
     // Take only 10 for now
-    val gkgFiles = Source.fromFile("gdeltv2gkg.txt").getLines.take(10).mkString(",")
+    val fileSource = Source.fromFile("gdeltv2gkg.txt")
+    val gkgFiles = fileSource.getLines.take(10).mkString(",")
+    fileSource.close() // close file again
     val rdd = sc
       .textFile(gkgFiles) // each file is 1 partition
       .coalesce(32) // decrease partitions to number of cores and minimize shuffle read/write
