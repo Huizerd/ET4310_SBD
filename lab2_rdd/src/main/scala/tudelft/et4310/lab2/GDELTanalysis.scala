@@ -1,9 +1,11 @@
 package tudelft.et4310.lab2
 
+import java.net.URI
+
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql.SparkSession
 
 import scala.collection.mutable
-import scala.io.Source
 
 object GDELTanalysis {
 
@@ -18,9 +20,8 @@ object GDELTanalysis {
 
     // Import data (filenames file will be placed in same folder as .jar on S3 bucket)
     // Take only 10 for now
-    val fileSource = Source.fromFile("gdeltv2gkg.txt")
-    val gkgFiles = fileSource.getLines.take(10).mkString(",")
-    fileSource.close() // close file again
+    val gkgFiles = sc.textFile("s3://et4310group24/gdeltv2gkg.txt").take(1000).mkString(",")
+
     val rdd = sc
       .textFile(gkgFiles) // each file is 1 partition
       .coalesce(32) // decrease partitions to number of cores and minimize shuffle read/write
@@ -61,8 +62,17 @@ object GDELTanalysis {
         .sortBy(-_._2) // sort descending based on count
         .take(10)) // take 10 highest
 
+    // Delete output folder if it exists
+    val s3Bucket = FileSystem.get(new URI("s3n://et4310group24"), sc.hadoopConfiguration)
+    try {
+      s3Bucket.delete(new Path("s3n://et4310group24/output"), true)
+    } catch {
+      case _: Throwable => {}
+    }
+
+
     // Save
-    newestResult.saveAsTextFile("../output_rdd")
+    newestResult.saveAsTextFile("s3://et4310group24/output")
 
     // Quit
     spark.stop
