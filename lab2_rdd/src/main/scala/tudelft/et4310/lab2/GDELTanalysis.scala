@@ -18,17 +18,14 @@ object GDELTanalysis {
       .getOrCreate()
     val sc = spark.sparkContext
 
-    // Import data (filenames file will be placed in same folder as .jar on S3 bucket)
-    // Take only 10 for now
-    val gkgFiles = sc.textFile("s3://et4310group24/gdeltv2gkg.txt").take(1000).mkString(",")
-
+    // Import data
     val rdd = sc
-      .textFile(gkgFiles) // each file is 1 partition
-      .coalesce(32) // decrease partitions to number of cores and minimize shuffle read/write
+      .textFile("s3://gdelt-open-data/v2/gkg/201502*.gkg.csv") // each file is 1 partition
+      .coalesce(2 * sc.defaultParallelism) // decrease partitions to 2-4 times the number of cores
 
     // flatMap rows to array of (publishDate, name) + filter (as early as possible = better)
     val data = rdd
-      .filter(row => row.split("\t", -1).length == 27) // no need to fuse this! (=filter inside flatMap)
+      .filter(row => row.split("\t", -1).length == 27) // no need to fuse this! ( = filter inside flatMap)
       .flatMap(row => {
       val columns = row.split("\t", -1)
       val publishDate = columns(1).substring(0, 8) // take only yyyymmdd
@@ -38,7 +35,7 @@ object GDELTanalysis {
           val name = names.split(",")(0) // take only name, not offset
           (publishDate, name)
         })
-        .filter(x => x._2 != "" || x._2 != "Type ParentCategory") // filter for bad names
+        .filter(x => x._2 != "" && x._2 != "Type ParentCategory") // filter for bad names
     })
 
     // Aggregate by key using hashmaps
@@ -63,13 +60,12 @@ object GDELTanalysis {
         .take(10)) // take 10 highest
 
     // Delete output folder if it exists
-    val s3Bucket = FileSystem.get(new URI("s3n://et4310group24"), sc.hadoopConfiguration)
+    val outputBucket = FileSystem.get(new URI("s3://et4310group24"), sc.hadoopConfiguration)
     try {
-      s3Bucket.delete(new Path("s3n://et4310group24/output"), true)
+      outputBucket.delete(new Path("s3://et4310group24/output"), true)
     } catch {
       case _: Throwable => {}
     }
-
 
     // Save
     newestResult.saveAsTextFile("s3://et4310group24/output")

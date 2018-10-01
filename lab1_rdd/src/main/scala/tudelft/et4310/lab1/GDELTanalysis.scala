@@ -37,7 +37,7 @@ object GDELTanalysis {
         val name = names.split(",")(0) // take only name, not offset
         (publishDate, name)
       })
-        .filter(x => x._2 != "" || x._2 != "Type ParentCategory") // filter for bad names
+        .filter(x => x._2 != "" && x._2 != "Type ParentCategory") // filter for bad names
     })
 
     // Aggregate by key using hashmaps
