@@ -44,5 +44,5 @@ ax.set_ylabel('runtime [s]')
 ax.legend()
 
 fig.tight_layout()
-fig.savefig('../figures/performance2.pdf')
+fig.savefig('figures/performance2.pdf')
 plt.show()

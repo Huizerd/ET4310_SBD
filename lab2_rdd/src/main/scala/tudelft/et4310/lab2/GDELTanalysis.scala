@@ -20,8 +20,7 @@ object GDELTanalysis {
 
     // Import data
     val rdd = sc
-      .textFile("s3://gdelt-open-data/v2/gkg/201502*.gkg.csv") // each file is 1 partition
-      .coalesce(2 * sc.defaultParallelism) // decrease partitions to 2-4 times the number of cores
+      .textFile("s3://gdelt-open-data/v2/gkg/2015*.gkg.csv") // each file is 1 partition
 
     // flatMap rows to array of (publishDate, name) + filter (as early as possible = better)
     val data = rdd

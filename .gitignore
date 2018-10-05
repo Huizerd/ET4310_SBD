@@ -38,3 +38,8 @@ figures/
 
 # And logs
 logs/
+
+# And try-outs and configs and venv
+tryouts/
+configs/
+venv/
