@@ -1,6 +1,7 @@
 import boto3
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib.ticker import FormatStrFormatter, LinearLocator
 
 # Matplotlib config
 plt.style.use('ggplot')
@@ -19,7 +20,7 @@ plt.rcParams['figure.titlesize'] = 14
 client = boto3.client('ec2', region_name='us-east-2')
 
 # Specify instance types and subregions
-instance_types = ['c4.8xlarge', 'c5.9xlarge']
+instance_types = ['c4.large', 'c5.xlarge', 'r5.xlarge']
 subregions = ['us-east-2a', 'us-east-2b', 'us-east-2c']
 
 # Get prices for certain instance type and OS
@@ -45,12 +46,15 @@ for it, ax in zip(prices_clean.items(), axes.flat):
 		ax.plot(*zip(*p), label=sr)
 
 	ax.set_title(f'Spot instance prices: {it[0]}', fontstyle='italic')
-	ax.set_xlabel('date [-]')
+	# ax.set_xlabel('date [-]')
 	ax.set_ylabel('price [$/hr]')
 	ax.xaxis.set_major_locator(weeks)
 	ax.xaxis.set_major_formatter(weeks_format)
+	# ax.yaxis.set_major_locator(LinearLocator(5))
+	# ax.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
 	ax.legend()
 
 fig.autofmt_xdate()
 fig.tight_layout()
+fig.savefig('../figures/spotprices.pdf')
 plt.show()

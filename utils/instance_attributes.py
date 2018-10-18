@@ -15,13 +15,14 @@ plt.rcParams['xtick.labelsize'] = 12
 plt.rcParams['ytick.labelsize'] = 12
 plt.rcParams['legend.fontsize'] = 12
 plt.rcParams['figure.titlesize'] = 14
+colors = [pc['color'] for pc in plt.rcParams['axes.prop_cycle']]
 
 # Client setup --> pricing only for us-east-1
 client = boto3.client('pricing', region_name='us-east-1')
 
 # What instances to check, and which instances to put on the x and y-axis
-instance_types = ['c4.large', 'c4.xlarge', 'c4.2xlarge', 'c4.4xlarge', 'c4.8xlarge',
-                  'c5.large', 'c5.xlarge', 'c5.2xlarge', 'c5.4xlarge', 'c5.9xlarge', 'c5.18xlarge']
+instance_types = ['c4.large', 'c5.large', 'c5.xlarge', 'm4.large', 'm5.large',
+				  'm4.xlarge', 'm5.xlarge', 'r5.xlarge', 'r5.large', 'r4.large', 'r4.xlarge']
 attributes = ['memory', 'ecu']
 
 # Product filters
@@ -41,12 +42,19 @@ fig, ax = plt.subplots(figsize=(8, 4))
 
 # Plot by looping through dict
 for it, att in products.items():
-	ax.scatter(att[attributes[0]], att[attributes[1]], label=it)
+	if it[0] == 'c':
+		color = colors[0]
+	elif it[0] == 'm':
+		color = colors[1]
+	elif it[0] == 'r':
+		color == colors[2]
 
-ax.set_title(f'Characteristics of AWS EC2 instances', fontstyle='italic')
+	ax.scatter(att[attributes[0]], att[attributes[1]], label=it, color=color)
+	ax.annotate(it, (att[attributes[0]], att[attributes[1]]))
+
+ax.set_title(f'Characteristics of AWS EC2 large and xlarge instances', fontstyle='italic')
 ax.set_xlabel('memory [GB]')
 ax.set_ylabel('ECU [-]')
-ax.legend()
 
 fig.tight_layout()
 plt.show()

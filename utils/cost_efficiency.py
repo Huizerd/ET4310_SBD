@@ -1,6 +1,7 @@
 import boto3
 import json
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import datetime
 import re
 
@@ -17,6 +18,7 @@ plt.rcParams['ytick.labelsize'] = 12
 plt.rcParams['legend.fontsize'] = 12
 plt.rcParams['figure.titlesize'] = 14
 colors = [pc['color'] for pc in plt.rcParams['axes.prop_cycle']]
+facecolor = plt.rcParams['axes.facecolor']
 
 # Client setup for pricing (instance attributes) and EC2 (spot pricing)
 pricing_client = boto3.client('pricing', region_name='us-east-1')
@@ -24,7 +26,8 @@ ec2_client = boto3.client('ec2', region_name='us-east-2')
 
 # What instances to check, and which instances to put on the x and y-axis
 # Cheapest subregion is usually us-east-2c
-instance_types = ['c4.large', 'c4.8xlarge', 'c5.large', 'c5.xlarge', 'm5.large']
+instance_types = ['c4.large', 'c4.xlarge', 'c4.8xlarge', 'c5.large', 'c5.xlarge', 'm4.large', 'm5.large',
+				  'm4.xlarge', 'm5.xlarge', 'r5.xlarge', 'r5.large', 'r4.large', 'r4.xlarge']
 attributes = ['memory', 'ecu']
 subregions = ['us-east-2a', 'us-east-2b', 'us-east-2c']
 
@@ -58,17 +61,39 @@ for p in prices:
 # Create figure and axis
 fig, ax = plt.subplots(figsize=(8, 4))
 
+# Custom offsets for annotations
+y_offsets = [-8, 0, 0, 0, 0, -10, -10, 5, 5, 0, 0, 0, 0]
+
+def my_round(x, prec=3, base=.001):
+  return round(base * round(float(x)/base), prec)
+
 # Plot by looping through dict
-for it, att in products.items():
+for i, (it, att) in enumerate(products.items()):
+	if it[0] == 'c':
+		color = colors[0]
+	elif it[0] == 'm':
+		color = colors[1]
+	elif it[0] == 'r':
+		color = colors[2]
+
 	best_subregion = min(prices_clean[it], key=prices_clean[it].get)
 	min_price = prices_clean[it][best_subregion]
 
-	ax.scatter(att[attributes[0]] / min_price, att[attributes[1]] / min_price, color=colors[0])
-	ax.annotate(it + ' (' + best_subregion + ')', (att[attributes[0]] / min_price,att[attributes[1]] / min_price))
+	ax.scatter(att[attributes[0]] / min_price, att[attributes[1]] / min_price, color=color)
+	ax.annotate(it, (att[attributes[0]] / min_price, att[attributes[1]] / min_price + y_offsets[i]))
 
-ax.set_title(f'Cost efficiency of AWS EC2 instances', fontstyle='italic')
+ax.set_title(f'Cost efficiency of AWS EC2 instances in us-east-2', fontstyle='italic')
 ax.set_xlabel('memory efficiency [GB/($/hr)]')
 ax.set_ylabel('ECU efficiency [-/($/hr)]')
 
+legend = [Line2D([0], [0], marker='o', color=facecolor, label='compute optimized',
+                          markerfacecolor=colors[0], markersize=10),
+		  Line2D([0], [0], marker='o', color=facecolor, label='general purpose',
+                          markerfacecolor=colors[1], markersize=10),
+		  Line2D([0], [0], marker='o', color=facecolor, label='memory optimized',
+                          markerfacecolor=colors[2], markersize=10)]
+ax.legend(handles=legend)
+
 fig.tight_layout()
+fig.savefig('../figures/costefficiency.pdf')
 plt.show()
