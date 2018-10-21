@@ -20,7 +20,7 @@ plt.rcParams['figure.titlesize'] = 14
 client = boto3.client('ec2', region_name='us-east-2')
 
 # Specify instance types and subregions
-instance_types = ['c4.large', 'c5.xlarge', 'r5.xlarge']
+instance_types = ['c4.8xlarge', 'c5.xlarge']
 subregions = ['us-east-2a', 'us-east-2b', 'us-east-2c']
 
 # Get prices for certain instance type and OS

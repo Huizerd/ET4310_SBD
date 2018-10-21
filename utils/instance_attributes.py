@@ -37,6 +37,8 @@ for it, att in products.items():
 	for a, v in att.items():
 		products[it][a] = float(re.search(r'\d*\.*\d*', v).group())
 
+print(products)
+
 # Create figure and axis
 fig, ax = plt.subplots(figsize=(8, 4))
 

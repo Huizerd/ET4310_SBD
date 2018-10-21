@@ -58,6 +58,8 @@ prices_clean = {it: {sr: 0 for sr in subregions}  for it in instance_types}
 for p in prices:
 	prices_clean[p['InstanceType']][p['AvailabilityZone']] = float(p['SpotPrice'])
 
+print(prices_clean)
+
 # Create figure and axis
 fig, ax = plt.subplots(figsize=(8, 4))
 
