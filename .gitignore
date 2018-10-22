@@ -33,9 +33,6 @@ project/plugins/project/
 output_df/
 output_rdd/
 
-# And figures
-figures/
-
 # And logs
 logs/
 
