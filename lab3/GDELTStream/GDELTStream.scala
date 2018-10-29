@@ -3,7 +3,7 @@ package lab3
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
-import org.apache.kafka.streams.kstream.Transformer
+import org.apache.kafka.streams.kstream.{TimeWindows, Transformer}
 import org.apache.kafka.streams.processor._
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala._
@@ -30,7 +30,8 @@ object GDELTStream extends App {
   // TODO: Ask Dorus: what do you mean, without dates?
 
   // Process incoming stream
-  val records: KStream[String, String] = builder.stream[String, String]("gdelt")
+  val records: KStream[String, Long] = builder
+    .stream[String, String]("gdelt")
     .filter((k, v) => v.split("\t", -1).length == 27) // check correct length
     .flatMap((k, v) => {
     val columns = v.split("\t", -1)
@@ -39,16 +40,22 @@ object GDELTStream extends App {
       .split(";", -1)
       .map(names => {
         val name = names.split(",")(0) // take only name, not offset
-        (k, name)
+        (name, 1L) // this long is not needed actually
       })
-      .filter(x => x._2 != "" && x._2 != "Type ParentCategory") // filter for bad names
+      .filter(x => x._1 != "" && x._1 != "Type ParentCategory") // filter for bad names
   })
 
-  // It works when called here --> probably some problems with type conversion from Java <-> Scala
-  records.to("gdelt-histogram") // write to new stream
+  // Trying out windowed stream
+  val windowed: TimeWindowedKStream[String, Long] = records
+    .groupByKey // find something to just count names, so (name, 1) is not needed!
+    .windowedBy(TimeWindows.of(3600000).advanceBy(60000)) // window of 1 hour, steps of 1 min
+
+  // Stream to histogram
+  windowed.count().toStream((k, v) => k.key()).to("gdelt-histogram")
 
   // To print keys/values, use this
-  //  records.foreach((k, v) => println(k))
+  // It works when called here --> probably some problems with type conversion from Java <-> Scala
+  //  windowed.foreach((k, v) => println(k + " - " + v))
 
   val streams: KafkaStreams = new KafkaStreams(builder.build(), props)
   streams.cleanUp()
@@ -77,7 +84,7 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
     this.context = context
   }
 
-  // Should return the current count of the name during the _last_ hour
+  // Should return the current count of the name during the last hour
   def transform(key: String, name: String): (String, Long) = {
     ("Donald Trump", 1L)
   }
