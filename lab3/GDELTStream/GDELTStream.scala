@@ -44,14 +44,11 @@ object GDELTStream extends App {
       .filter(x => x._2 != "" && x._2 != "Type ParentCategory") // filter for bad names
   })
 
-  // TODO: Ask Dorus: why does this work??
+  // It works when called here --> probably some problems with type conversion from Java <-> Scala
   records.to("gdelt-histogram") // write to new stream
 
-  // TODO: Ask Dorus: why does this below work, but not when put directly behind builder.stream etc.??
+  // To print keys/values, use this
   //  records.foreach((k, v) => println(k))
-
-  // TODO: Ask Dorus: and how does this work?
-  //  records.print(Printed.toSysOut)
 
   val streams: KafkaStreams = new KafkaStreams(builder.build(), props)
   streams.cleanUp()
