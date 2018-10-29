@@ -27,26 +27,31 @@ object GDELTStream extends App {
   // Filter this stream to a stream of (key, name). This is similar to Lab 1,
   // only without dates! After this apply the HistogramTransformer. Finally, 
   // write the result to a new topic called gdelt-histogram.
-  // Ask Dorus: what do you mean, without dates?
+  // TODO: Ask Dorus: what do you mean, without dates?
 
   // Process incoming stream
   val records: KStream[String, String] = builder.stream[String, String]("gdelt")
     .filter((k, v) => v.split("\t", -1).length == 27) // check correct length
     .flatMap((k, v) => {
     val columns = v.split("\t", -1)
-    val newKey = columns(1).substring(0, 12) // take only yyyymmddhhMM
+    //    val newKey = columns(1).substring(0, 12) // take only yyyymmddhhMM
     columns(23)
       .split(";", -1)
       .map(names => {
         val name = names.split(",")(0) // take only name, not offset
-        (newKey, name)
+        (k, name)
       })
       .filter(x => x._2 != "" && x._2 != "Type ParentCategory") // filter for bad names
   })
-    .to("gdelt-histogram") // write to new stream
 
-  // Ask Dorus: why does this below work, but not when put directly behind builder.stream etc.??
-  //  records.foreach((k, v) => println("(" + k + ", " + v + ")"))
+  // TODO: Ask Dorus: why does this work??
+  records.to("gdelt-histogram") // write to new stream
+
+  // TODO: Ask Dorus: why does this below work, but not when put directly behind builder.stream etc.??
+  //  records.foreach((k, v) => println(k))
+
+  // TODO: Ask Dorus: and how does this work?
+  //  records.print(Printed.toSysOut)
 
   val streams: KafkaStreams = new KafkaStreams(builder.build(), props)
   streams.cleanUp()
