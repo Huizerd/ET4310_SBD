@@ -8,10 +8,10 @@ lazy val example = (project in file("."))
     connectInput in run := true,
 
     libraryDependencies ++= Seq(
-      {
+        {
         sys.props += "packaging.type" -> "jar"
         "org.apache.kafka" %% "kafka-streams-scala" % "2.0.0"
-      },
+        },
     )
   )
 
