@@ -72,7 +72,6 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
   var context: ProcessorContext = _
   var countStore: KeyValueStore[String, Long] = _
   var timeStore: KeyValueStore[String, Long] = _
-  //val hourInMs: Long = 3600*1000
   val minInMs: Long = 60*1000
   var minute: Long = _
   val secInMs: Long = 1000
@@ -83,7 +82,7 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
     this.timeStore = context.getStateStore("timeStore").asInstanceOf[KeyValueStore[String, Long]]
     this.minute = 1 // first minute from (initialization) is called minute 1
 
-    this.context.schedule(this.secInMs/10, PunctuationType.STREAM_TIME, (timestamp) => {
+    this.context.schedule(this.secInMs, PunctuationType.STREAM_TIME, (timestamp) => {
          val iter = this.countStore.all
          while (iter.hasNext) {
              val entry = iter.next()
@@ -93,18 +92,17 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
          context.commit()
      })
 
-     // problem: delete ones which shouldnt be deleted? sol: 59 back in time instead
-     // delete before add
-     // context.timeStamp instead?
-     // save all records?
-     // problem: doesnt take into account execution time... sol: System.nanoTime, or context.timeStamp (relative difference).
+     // to avoid deleting input that shouldn't be deleted: delete those 59 back in time
+     // alts: contex.timeStamp, System.nanoTime
      // problem: if get actual name that is called something like name60, and already have name before
+     // this is slowing down stream? can still do transformations while this is schedule is running?
+     // how long time is this taking? more than 1 min => problem
      // is it working at all?
-
      this.context.schedule(this.minInMs, PunctuationType.WALL_CLOCK_TIME, (timestamp) =>{
-        if(this.minute >= 60){ // or 61?
+        this.minute = this.minute + 1
+        if(this.minute >= 60){
           val iter = this.countStore.all
-          var minute2 = this.minute%60 +1 // delete those 59 min back in time
+          var minute2 = this.minute%60 + 1 // delete those 59 min back in time
           while(iter.hasNext){ // for every name
             var entry = iter.next()
             var name = entry.key
@@ -116,7 +114,6 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
           iter.close()
           context.commit()
         }
-        this.minute = this.minute + 1
      })
   }
 
@@ -135,7 +132,7 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
       if(existing2 == None){
         this.timeStore.put(minName, 1)
       }else{
-        this.timeStore.put(minName, this.timeStore.get(minName)+1)
+        this.timeStore.put(minName, this.timeStore.get(minName) + 1)
       }
     }
     (name, this.countStore.get(name))

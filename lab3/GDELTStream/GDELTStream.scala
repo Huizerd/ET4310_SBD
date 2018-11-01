@@ -72,16 +72,15 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
   var context: ProcessorContext = _
   var countStore: KeyValueStore[String, Long] = _
   var timeStore: KeyValueStore[String, Long] = _
-  //val hourInMs: Long = 3600*1000
   val minInMs: Long = 60*1000
-  var minute: Long = _
+  var second: Long = _
   val secInMs: Long = 1000
 
   def init(context: ProcessorContext) {
     this.context = context
     this.countStore = context.getStateStore("countStore").asInstanceOf[KeyValueStore[String, Long]]
     this.timeStore = context.getStateStore("timeStore").asInstanceOf[KeyValueStore[String, Long]]
-    this.minute = 1 // first minute from (initialization) is called minute 1
+    this.second = 1 // first second from (initialization) is called second 1
 
     this.context.schedule(this.secInMs/10, PunctuationType.STREAM_TIME, (timestamp) => {
          val iter = this.countStore.all
@@ -93,51 +92,47 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
          context.commit()
      })
 
-     // problem: delete ones which shouldnt be deleted? sol: 59 back in time instead
-     // delete before add
-     // context.timeStamp instead?
-     // save all records?
-     // relative time? system.nanoTime...
-     // problem: doesnt take into account execution time... sol: System.nanoTime relative difference.
+     // to avoid deleting input that shouldn't be deleted: delete those 59 back in time
+     // alts: contex.timeStamp, System.nanoTime
      // problem: if get actual name that is called something like name60, and already have name before
+     // this is slowing down stream? can still do transformations while this is schedule is running?
+     // how long time is this taking? more than 1 sec => problem
      // is it working at all?
-
-     this.context.schedule(this.secInMs, PunctuationType.WALL_CLOCK_TIME, (timeStamp) => {
-     //this.context.schedule(this.minInMs, PunctuationType.WALL_CLOCK_TIME, (timestamp) =>{
-        if(this.minute >= 60){ // or 61
+     this.context.schedule(this.secInMs, PunctuationType.WALL_CLOCK_TIME, (timestamp) =>{
+        this.second = this.second + 1
+        if(this.second >= 60){
           val iter = this.countStore.all
-          var minute2 = this.minute%60 +1 // delete those 59 min back in time
+          var second = this.second%60 + 1 // delete those 59 sec back in time
           while(iter.hasNext){ // for every name
             var entry = iter.next()
             var name = entry.key
-            var minName = name.concat(minute2.toString())
-            var toBeDeleted = this.timeStore.get(minName)
+            var secName = name.concat(second2.toString())
+            var toBeDeleted = this.timeStore.get(secName)
             this.countStore.put(name, this.countStore.get(name) - toBeDeleted)
-            this.timeStore.put(minName, 0)
+            this.timeStore.put(secName, 0)
           }
           iter.close()
           context.commit()
         }
-        this.minute = this.minute + 1
      })
   }
 
   def transform(key: String, name: String): (String, Long) = {
     var oldCount: Long = this.countStore.get(name)
     var existing = Option(oldCount)
-    var time = this.minute%60
-    var minName = name.concat(time.toString())
+    var time = this.second%60
+    var secName = name.concat(time.toString())
 
     if(existing == None){
       this.countStore.put(name, 1)
-      this.timeStore.put(minName, 1)
+      this.timeStore.put(secName, 1)
     }else{
       this.countStore.put(name, oldCount + 1)
-      val existing2 = Option(this.timeStore.get(minName))
+      val existing2 = Option(this.timeStore.get(secName))
       if(existing2 == None){
-        this.timeStore.put(minName, 1)
+        this.timeStore.put(secName, 1)
       }else{
-        this.timeStore.put(minName, this.timeStore.get(minName)+1)
+        this.timeStore.put(secName, this.timeStore.get(secName) + 1)
       }
     }
     (name, this.countStore.get(name))
