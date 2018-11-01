@@ -31,6 +31,14 @@ object GDELTStream extends App {
 
   builder.addStateStore(keyValueStoreBuilder)
 
+  val keyValueStoreBuilder2 = Stores.keyValueStoreBuilder(
+    Stores.inMemoryKeyValueStore("timeStore"),
+    Serdes.String,
+    Serdes.Long
+  )
+
+  builder.addStateStore(keyValueStoreBuilder2)
+
   val records: KStream[String, String] = builder.stream[String, String]("gdelt")
     .filter((k, v) => v.split("\t", -1).length == 27) // check correct length
     .flatMap((k,v) => {
@@ -44,7 +52,7 @@ object GDELTStream extends App {
       .filter(x => x._2 != "" && x._2 != "Type ParentCategory") // filter for bad names
     })
 
-  var r2 = records.transform(new HistogramTransformer(), "countStore")
+  var r2 = records.transform(new HistogramTransformer(), "countStore", "timeStore")
   r2.to("gdelt-histogram")
 
   val streams: KafkaStreams = new KafkaStreams(builder.build(), props)
@@ -62,53 +70,77 @@ object GDELTStream extends App {
 
 class HistogramTransformer extends Transformer[String, String, (String, Long)] {
   var context: ProcessorContext = _
-  var kvStoreCount: KeyValueStore[String, Long] = _
-  var hourInMs = 3600*1000
+  var countStore: KeyValueStore[String, Long] = _
+  var timeStore: KeyValueStore[String, Long] = _
+  //val hourInMs: Long = 3600*1000
+  val minInMs: Long = 60*1000
+  var minute: Long = _
+  val secInMs: Long = 1000
 
-  // must maybe clear the store, so not get out of memory
   def init(context: ProcessorContext) {
     this.context = context
-    this.kvStoreCount = context.getStateStore("countStore").asInstanceOf[KeyValueStore[String, Long]]
+    this.countStore = context.getStateStore("countStore").asInstanceOf[KeyValueStore[String, Long]]
+    this.timeStore = context.getStateStore("timeStore").asInstanceOf[KeyValueStore[String, Long]]
+    this.minute = 1 // first minute from (initialization) is called minute 1
 
-    // send current result downStream every 1s
-    this.context.schedule(1000, PunctuationType.STREAM_TIME, (timestamp) => {
-         val iter = this.kvStoreCount.all
+    this.context.schedule(this.secInMs/10, PunctuationType.STREAM_TIME, (timestamp) => {
+         val iter = this.countStore.all
          while (iter.hasNext) {
              val entry = iter.next()
              context.forward(entry.key, entry.value)
          }
          iter.close()
-         // commit the current processing progress
          context.commit()
      })
 
-     // reset counts every 1h
-     // problem: unclear how this schedule-method works.
-     // problem: this assumes time starts when starts to run program
-     // alt.: delete the store, and initialize it again (no mem. problem? possible?)
-     this.context.schedule(hourInMs, PunctuationType.WALL_CLOCK_TIME, (timestamp)=>{
-        val iter = this.kvStoreCount.all
-        while(iter.hasNext) {
-          val entry = iter.next()
-          this.kvStoreCount.put(entry.key, 0)
+     // problem: delete ones which shouldnt be deleted? sol: 59 back in time instead
+     // delete before add
+     // context.timeStamp instead?
+     // save all records?
+     // relative time? system.nanoTime...
+     // problem: doesnt take into account execution time... sol: System.nanoTime relative difference.
+     // problem: if get actual name that is called something like name60, and already have name before
+     // is it working at all?
+
+     this.context.schedule(this.secInMs, PunctuationType.WALL_CLOCK_TIME, (timeStamp) => {
+     //this.context.schedule(this.minInMs, PunctuationType.WALL_CLOCK_TIME, (timestamp) =>{
+        if(this.minute >= 60){ // or 61
+          val iter = this.countStore.all
+          var minute2 = this.minute%60 +1 // delete those 59 min back in time
+          while(iter.hasNext){ // for every name
+            var entry = iter.next()
+            var name = entry.key
+            var minName = name.concat(minute2.toString())
+            var toBeDeleted = this.timeStore.get(minName)
+            this.countStore.put(name, this.countStore.get(name) - toBeDeleted)
+            this.timeStore.put(minName, 0)
+          }
+          iter.close()
+          this.minute = this.minute + 1
+          context.commit()
         }
      })
   }
 
   def transform(key: String, name: String): (String, Long) = {
-    val oldCount: Long = this.kvStoreCount.get(name)
-    val existing = Option(oldCount)
+    var oldCount: Long = this.countStore.get(name)
+    var existing = Option(oldCount)
+    var time = this.minute%60
+    var minName = name.concat(time.toString())
 
-    // alt.: one more kvStore storing the time each message came. Update this time
-    //       when there has been more than 1 hour since last it came to transform.
-    //       => problem: count isn't reset until next time key (msg). Should be res. earlier
-
-    if(existing == None){ // initialize
-      this.kvStoreCount.put(name, 1)
-    }else{ // update
-      this.kvStoreCount.put(name, oldCount+1)
+    if(existing == None){
+      this.countStore.put(name, 1)
+      this.timeStore.put(minName, 1)
+    }else{
+      this.countStore.put(name, oldCount + 1)
+      val existing2 = Option(this.timeStore.get(minName))
+      if(existing2 == None){
+        this.timeStore.put(minName, 1)
+      }else{
+        this.timeStore.put(minName, this.timeStore.get(minName)+1)
+      }
     }
-    (name, this.kvStoreCount.get(name))
+    (name, this.countStore.get(name))
   }
 
   def punctuate(timestamp: Long){
