@@ -116,9 +116,9 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
             this.timeStore.put(minName, 0)
           }
           iter.close()
-          this.minute = this.minute + 1
           context.commit()
         }
+        this.minute = this.minute + 1
      })
   }
 

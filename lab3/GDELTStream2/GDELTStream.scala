@@ -39,7 +39,6 @@ object GDELTStream extends App {
 
   builder.addStateStore(keyValueStoreBuilder2)
 
-
   val records: KStream[String, String] = builder.stream[String, String]("gdelt")
     .filter((k, v) => v.split("\t", -1).length == 27) // check correct length
     .flatMap((k,v) => {
@@ -53,7 +52,7 @@ object GDELTStream extends App {
       .filter(x => x._2 != "" && x._2 != "Type ParentCategory") // filter for bad names
     })
 
-  var r2 = records.transform(new HistogramTransformer(), "countStore","timeStore")
+  var r2 = records.transform(new HistogramTransformer(), "countStore", "timeStore")
   r2.to("gdelt-histogram")
 
   val streams: KafkaStreams = new KafkaStreams(builder.build(), props)
@@ -70,47 +69,76 @@ object GDELTStream extends App {
 }
 
 class HistogramTransformer extends Transformer[String, String, (String, Long)] {
-
   var context: ProcessorContext = _
-  var kvStoreCount: KeyValueStore[String, Long] = _
-  var kvStoreTime: KeyValueStore[String, Long] = _
-  var hourInMs = 3600*1000
+  var countStore: KeyValueStore[String, Long] = _
+  var timeStore: KeyValueStore[String, Long] = _
+  //val hourInMs: Long = 3600*1000
+  val minInMs: Long = 60*1000
+  var minute: Long = _
+  val secInMs: Long = 1000
 
   def init(context: ProcessorContext) {
     this.context = context
-    this.kvStoreCount = context.getStateStore("countStore").asInstanceOf[KeyValueStore[String, Long]]
-    this.kvStoreTime = context.getStateStore("timeStore").asInstanceOf[KeyValueStore[String, Long]]
+    this.countStore = context.getStateStore("countStore").asInstanceOf[KeyValueStore[String, Long]]
+    this.timeStore = context.getStateStore("timeStore").asInstanceOf[KeyValueStore[String, Long]]
+    this.minute = 1 // first minute from (initialization) is called minute 1
 
-    // send current result downStream every 1s
-    this.context.schedule(1000, PunctuationType.STREAM_TIME, (timestamp) => {
-         val iter = this.kvStoreCount.all
+    this.context.schedule(this.secInMs/10, PunctuationType.STREAM_TIME, (timestamp) => {
+         val iter = this.countStore.all
          while (iter.hasNext) {
              val entry = iter.next()
              context.forward(entry.key, entry.value)
          }
          iter.close()
-         // commit the current processing progress
          context.commit()
      })
-  }
-  def transform(key: String, name: String): (String, Long) = {
-    val oldCount: Long = this.kvStoreCount.get(name)
-    val existing = Option(oldCount)
-    val currTime = context.timestamp
 
-    if(existing == None){ //initialize
-      this.kvStoreCount.put(name, 1)
-      this.kvStoreTime.put(name, currTime)
+     // problem: delete ones which shouldnt be deleted? sol: 59 back in time instead
+     // delete before add
+     // context.timeStamp instead?
+     // save all records?
+     // problem: doesnt take into account execution time... sol: System.nanoTime, or context.timeStamp (relative difference).
+     // problem: if get actual name that is called something like name60, and already have name before
+     // is it working at all?
+
+     this.context.schedule(this.minInMs, PunctuationType.WALL_CLOCK_TIME, (timestamp) =>{
+        if(this.minute >= 60){ // or 61?
+          val iter = this.countStore.all
+          var minute2 = this.minute%60 +1 // delete those 59 min back in time
+          while(iter.hasNext){ // for every name
+            var entry = iter.next()
+            var name = entry.key
+            var minName = name.concat(minute2.toString())
+            var toBeDeleted = this.timeStore.get(minName)
+            this.countStore.put(name, this.countStore.get(name) - toBeDeleted)
+            this.timeStore.put(minName, 0)
+          }
+          iter.close()
+          context.commit()
+        }
+        this.minute = this.minute + 1
+     })
+  }
+
+  def transform(key: String, name: String): (String, Long) = {
+    var oldCount: Long = this.countStore.get(name)
+    var existing = Option(oldCount)
+    var time = this.minute%60
+    var minName = name.concat(time.toString())
+
+    if(existing == None){
+      this.countStore.put(name, 1)
+      this.timeStore.put(minName, 1)
     }else{
-      val createTime = this.kvStoreTime.get(name)
-      if(currTime-createTime>hourInMs){ // reset
-        this.kvStoreCount.put(name, 1)
-        this.kvStoreTime.put(name, currTime)
-      }else{ // update
-        this.kvStoreCount.put(name, oldCount+1)
+      this.countStore.put(name, oldCount + 1)
+      val existing2 = Option(this.timeStore.get(minName))
+      if(existing2 == None){
+        this.timeStore.put(minName, 1)
+      }else{
+        this.timeStore.put(minName, this.timeStore.get(minName)+1)
       }
     }
-    (name, this.kvStoreCount.get(name))
+    (name, this.countStore.get(name))
   }
 
   def punctuate(timestamp: Long){
