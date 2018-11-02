@@ -2,14 +2,13 @@ package lab3
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
-import org.apache.kafka.streams.kstream.Materialized
 import org.apache.kafka.streams.kstream.Transformer
 import org.apache.kafka.streams.processor._
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.state._
-import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig, Topology}
+import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
 
 object GDELTStream extends App {
   import Serdes._
@@ -44,7 +43,7 @@ object GDELTStream extends App {
     .flatMap((k,v) => {
     val columns = v.split("\t", -1)
     columns(23)
-      .split(" ", -1)
+      .split(";", -1)
       .map(names => {
         val name = names.split(",")(0) // take only name, not offset
         (k, name)
@@ -106,7 +105,7 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
           while(iter.hasNext){ // for every name
             var entry = iter.next()
             var name = entry.key
-            var secName = name.concat(second2.toString())
+            var secName = name.concat(second.toString())
             var toBeDeleted = this.timeStore.get(secName)
             this.countStore.put(name, this.countStore.get(name) - toBeDeleted)
             this.timeStore.put(secName, 0)
