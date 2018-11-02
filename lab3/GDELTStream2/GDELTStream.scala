@@ -44,7 +44,7 @@ object GDELTStream extends App {
     .flatMap((k,v) => {
     val columns = v.split("\t", -1)
     columns(23)
-      .split(" ", -1)
+      .split(";", -1)
       .map(names => {
         val name = names.split(",")(0) // take only name, not offset
         (k, name)
