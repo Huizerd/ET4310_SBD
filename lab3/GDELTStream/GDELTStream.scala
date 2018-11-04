@@ -44,7 +44,7 @@ object GDELTStream extends App {
     .flatMap((k,v) => {
     val columns = v.split("\t", -1)
     columns(23)
-      .split(" ", -1)
+      .split(";", -1)
       .map(names => {
         val name = names.split(",")(0) // take only name, not offset
         (k, name)
@@ -68,6 +68,7 @@ object GDELTStream extends App {
   System.exit(0)
 }
 
+// clear store after while, so not out of memory?
 class HistogramTransformer extends Transformer[String, String, (String, Long)] {
   var context: ProcessorContext = _
   var countStore: KeyValueStore[String, Long] = _
@@ -94,10 +95,11 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
 
      // to avoid deleting input that shouldn't be deleted: delete those 59 back in time
      // alts: contex.timeStamp, System.nanoTime
-     // problem: if get actual name that is called something like name60, and already have name before
+     // problem: if get actual name that is called something like name60, and already have name before: solution custom serde, key = name, value = list of long's
      // this is slowing down stream? can still do transformations while this is schedule is running?
      // how long time is this taking? more than 1 sec => problem
      // is it working at all?
+
      this.context.schedule(this.secInMs, PunctuationType.WALL_CLOCK_TIME, (timestamp) =>{
         this.second = this.second + 1
         if(this.second >= 60){
@@ -120,8 +122,8 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
   def transform(key: String, name: String): (String, Long) = {
     var oldCount: Long = this.countStore.get(name)
     var existing = Option(oldCount)
-    var time = this.second%60
-    var secName = name.concat(time.toString())
+    var time = this.second%60 // 61 -> 1, 62 -> 2, and so on
+    var secName = name.concat(time.toString()) // use this as key: name -> nameTime
 
     if(existing == None){
       this.countStore.put(name, 1)

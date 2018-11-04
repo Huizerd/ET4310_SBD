@@ -117,4 +117,3 @@ class HistogramProcessor extends Processor[String, Long] {
 
   }
 }
-

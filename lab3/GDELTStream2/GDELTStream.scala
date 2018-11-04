@@ -24,7 +24,7 @@ object GDELTStream extends App {
   val builder: StreamsBuilder = new StreamsBuilder
 
   val keyValueStoreBuilder = Stores.keyValueStoreBuilder(
-    Stores.inMemoryKeyValueStore("countStore"),
+    Stores.persistentKeyValueStore("countStore"),
     Serdes.String,
     Serdes.Long
   )
@@ -32,7 +32,7 @@ object GDELTStream extends App {
   builder.addStateStore(keyValueStoreBuilder)
 
   val keyValueStoreBuilder2 = Stores.keyValueStoreBuilder(
-    Stores.inMemoryKeyValueStore("timeStore"),
+    Stores.persistentKeyValueStore("timeStore"),
     Serdes.String,
     Serdes.Long
   )
@@ -41,10 +41,10 @@ object GDELTStream extends App {
 
   val records: KStream[String, String] = builder.stream[String, String]("gdelt")
     .filter((k, v) => v.split("\t", -1).length == 27) // check correct length
-    .flatMap((k,v) => {
+    .flatMap((k, v) => {
     val columns = v.split("\t", -1)
     columns(23)
-      .split(" ", -1)
+      .split(";", -1)
       .map(names => {
         val name = names.split(",")(0) // take only name, not offset
         (k, name)
@@ -80,7 +80,7 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
     this.context = context
     this.countStore = context.getStateStore("countStore").asInstanceOf[KeyValueStore[String, Long]]
     this.timeStore = context.getStateStore("timeStore").asInstanceOf[KeyValueStore[String, Long]]
-    this.minute = 1 // first minute from (initialization) is called minute 1
+    this.minute = 1 // first minute from initialization is called minute 1
 
     this.context.schedule(this.secInMs, PunctuationType.STREAM_TIME, (timestamp) => {
          val iter = this.countStore.all
@@ -92,12 +92,6 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
          context.commit()
      })
 
-     // to avoid deleting input that shouldn't be deleted: delete those 59 back in time
-     // alts: contex.timeStamp, System.nanoTime
-     // problem: if get actual name that is called something like name60, and already have name before
-     // this is slowing down stream? can still do transformations while this is schedule is running?
-     // how long time is this taking? more than 1 min => problem
-     // is it working at all?
      this.context.schedule(this.minInMs, PunctuationType.WALL_CLOCK_TIME, (timestamp) =>{
         this.minute = this.minute + 1
         if(this.minute >= 60){
@@ -106,7 +100,7 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
           while(iter.hasNext){ // for every name
             var entry = iter.next()
             var name = entry.key
-            var minName = name.concat(minute2.toString())
+            var minName = minute2.toString() + name + minute2.toString()
             var toBeDeleted = this.timeStore.get(minName)
             this.countStore.put(name, this.countStore.get(name) - toBeDeleted)
             this.timeStore.put(minName, 0)
@@ -118,17 +112,17 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
   }
 
   def transform(key: String, name: String): (String, Long) = {
+    var minute2 = this.minute%60
+    var minName = minute2.toString() + name + minute2.toString()
     var oldCount: Long = this.countStore.get(name)
     var existing = Option(oldCount)
-    var time = this.minute%60
-    var minName = name.concat(time.toString())
 
     if(existing == None){
       this.countStore.put(name, 1)
       this.timeStore.put(minName, 1)
     }else{
       this.countStore.put(name, oldCount + 1)
-      val existing2 = Option(this.timeStore.get(minName))
+      var existing2 = Option(this.timeStore.get(minName))
       if(existing2 == None){
         this.timeStore.put(minName, 1)
       }else{
