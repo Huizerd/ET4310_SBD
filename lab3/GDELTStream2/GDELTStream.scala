@@ -1,17 +1,18 @@
 package lab3
+
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
-import org.apache.kafka.streams.kstream.Materialized
 import org.apache.kafka.streams.kstream.Transformer
 import org.apache.kafka.streams.processor._
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.state._
-import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig, Topology}
+import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
 
 object GDELTStream extends App {
+
   import Serdes._
 
   val props: Properties = {
@@ -50,7 +51,7 @@ object GDELTStream extends App {
         (k, name)
       })
       .filter(x => x._2 != "" && x._2 != "Type ParentCategory") // filter for bad names
-    })
+  })
 
   var r2 = records.transform(new HistogramTransformer(), "countStore", "timeStore")
   r2.to("gdelt-histogram")
@@ -72,7 +73,7 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
   var context: ProcessorContext = _
   var countStore: KeyValueStore[String, Long] = _
   var timeStore: KeyValueStore[String, Long] = _
-  val minInMs: Long = 60*1000
+  val minInMs: Long = 60 * 1000
   var minute: Long = _
   val secInMs: Long = 1000
 
@@ -83,56 +84,56 @@ class HistogramTransformer extends Transformer[String, String, (String, Long)] {
     this.minute = 1 // first minute from initialization is called minute 1
 
     this.context.schedule(this.secInMs, PunctuationType.STREAM_TIME, (timestamp) => {
-         val iter = this.countStore.all
-         while (iter.hasNext) {
-             val entry = iter.next()
-             context.forward(entry.key, entry.value)
-         }
-         iter.close()
-         context.commit()
-     })
+      val iter = this.countStore.all
+      while (iter.hasNext) {
+        val entry = iter.next()
+        context.forward(entry.key, entry.value)
+      }
+      iter.close()
+      context.commit()
+    })
 
-     this.context.schedule(this.minInMs, PunctuationType.WALL_CLOCK_TIME, (timestamp) =>{
-        this.minute = this.minute + 1
-        if(this.minute >= 60){
-          val iter = this.countStore.all
-          var minute2 = this.minute%60 + 1 // delete those 59 min back in time
-          while(iter.hasNext){ // for every name
-            var entry = iter.next()
-            var name = entry.key
-            var minName = minute2.toString() + name + minute2.toString()
-            var toBeDeleted = this.timeStore.get(minName)
-            this.countStore.put(name, this.countStore.get(name) - toBeDeleted)
-            this.timeStore.put(minName, 0)
-          }
-          iter.close()
-          context.commit()
+    this.context.schedule(this.minInMs, PunctuationType.WALL_CLOCK_TIME, (timestamp) => {
+      this.minute = this.minute + 1
+      if (this.minute >= 60) {
+        val iter = this.countStore.all
+        var minute2 = this.minute % 60 + 1 // delete those 59 min back in time
+        while (iter.hasNext) { // for every name
+          var entry = iter.next()
+          var name = entry.key
+          var minName = minute2.toString() + name + minute2.toString()
+          var toBeDeleted = this.timeStore.get(minName)
+          this.countStore.put(name, this.countStore.get(name) - toBeDeleted)
+          this.timeStore.put(minName, 0)
         }
-     })
+        iter.close()
+        context.commit()
+      }
+    })
   }
 
   def transform(key: String, name: String): (String, Long) = {
-    var minute2 = this.minute%60
+    var minute2 = this.minute % 60
     var minName = minute2.toString() + name + minute2.toString()
     var oldCount: Long = this.countStore.get(name)
     var existing = Option(oldCount)
 
-    if(existing == None){
+    if (existing == None) {
       this.countStore.put(name, 1)
       this.timeStore.put(minName, 1)
-    }else{
+    } else {
       this.countStore.put(name, oldCount + 1)
       var existing2 = Option(this.timeStore.get(minName))
-      if(existing2 == None){
+      if (existing2 == None) {
         this.timeStore.put(minName, 1)
-      }else{
+      } else {
         this.timeStore.put(minName, this.timeStore.get(minName) + 1)
       }
     }
     (name, this.countStore.get(name))
   }
 
-  def punctuate(timestamp: Long){
+  def punctuate(timestamp: Long) {
     // do nothing
   }
 
