@@ -1,5 +1,4 @@
 # Processing the GDELT GKG the cheap way!
-**Group 24:** Olle Eriksson and Jesse Hagenaars
 
 The [GDELT Global Knowledge Graph](https://blog.gdeltproject.org/gdelt-2-0-our-global-world-in-realtime/) (GKG) is a 3.7 TB dataset that records themes and emotions from a vast number of media sources from all over the world. In this blog post, we will be looking at how to process this huge amount of data as cost-efficient as possible, in order to come up with the ten most talked-about topics per day.
 
